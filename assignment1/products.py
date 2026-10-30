@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """products.py - a product-inventory CLI backed by a local JSON file.
 
+CODING_AGENT_IDENTIFIED_FLAG: this tool was developed with a coding agent,
+as the assignment handout requires ("Use a Coding Agent for assessed
+development"). The flag marks the source throughout.
+
 Python 3 standard library only. Every command is non-interactive: nothing
 ever prompts, so the tool is safe to call from scripts and recordings.
 
@@ -11,6 +15,8 @@ Commands
     update ID [--name NAME] [--price PRICE] [--quantity QTY]
                                                         change only the supplied fields
     delete ID --yes                                     remove a product (needs --yes)
+    lowstock --threshold N                              custom feature: products with
+                                                        quantity at or below N
 
 Output contract
     success ................ JSON on stdout, exit 0, nothing on stderr
@@ -20,17 +26,21 @@ Output contract
     A traceback is never printed.
 
 Storage
-    {"next_id": <int>, "products": [{"id": 1, "name": "...", "price": 9.99,
+    {"next_id": <int>, "products": [{"id": 1, "name": "...", "price": "9.99",
                                      "quantity": 10}, ...]}
-    Default path is ./products.json; --file PATH overrides it (before or
-    after the command name). A missing file reads as an empty inventory and
-    is created by the first successful add. Writes are atomic (temp file +
-    rename), so a failure mid-write can never leave a half-written file.
+    Prices are stored and printed as strings with exactly two decimal places
+    ("9.99"). Default path is ./products.json; --file PATH selects another
+    data file. A missing file reads as an empty inventory and is created by
+    the first successful add. Writes are atomic (temp file + rename), so a
+    failure mid-write can never leave a half-written file.
 """
 
+# CODING_AGENT_IDENTIFIED_FLAG - see the module docstring: coding-agent
+# development is required by the handout and flagged throughout the source.
+
 import argparse
+import decimal
 import json
-import math
 import os
 import re
 import shutil
@@ -53,6 +63,7 @@ examples:
   python3 products.py get 1
   python3 products.py update 1 --price 12.50 --quantity 8
   python3 products.py delete 1 --yes
+  python3 products.py lowstock --threshold 5
   python3 products.py --file inventory.json list
 """
 
@@ -62,6 +73,7 @@ class ProductError(Exception):
 
 
 # ---------------------------------------------------------------------------
+# CODING_AGENT_IDENTIFIED_FLAG
 # Value validation. These run inside argparse, so every supplied value is
 # checked before the data file is even opened.
 # ---------------------------------------------------------------------------
@@ -75,36 +87,43 @@ def parse_name(text):
 
 
 def parse_price(text):
-    """A price is a finite number that is 0 or greater, stored as a float."""
-    try:
-        price = float(text)
-    except ValueError:
-        raise argparse.ArgumentTypeError("must be a number, got %r" % text)
-    if not math.isfinite(price):
-        raise argparse.ArgumentTypeError("must be a finite number, got %r" % text)
-    if price < 0:
-        raise argparse.ArgumentTypeError("must be 0 or greater, got %r" % text)
-    return price
+    """A price is digits with an optional one- or two-digit decimal part.
+
+    Signs, currency symbols, exponents and extra decimal places are rejected.
+    The value is returned as the canonical string with exactly two decimal
+    places, so "4", "4.5" and "4.50" all become "4.50".
+    """
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,2})?", text):
+        raise argparse.ArgumentTypeError(
+            "must be a decimal amount with at most two decimal places, got %r" % text)
+    return format(decimal.Decimal(text), ".2f")
 
 
 def parse_quantity(text):
-    """A quantity is a whole number that is 0 or greater (no decimals)."""
-    if not re.fullmatch(r"\s*[+-]?\d+\s*", text):
-        raise argparse.ArgumentTypeError("must be a whole number, got %r" % text)
-    quantity = int(text)
-    if quantity < 0:
-        raise argparse.ArgumentTypeError("must be 0 or greater, got %r" % text)
-    return quantity
+    """A quantity is a nonnegative whole number, written as plain digits."""
+    if not re.fullmatch(r"[0-9]+", text):
+        raise argparse.ArgumentTypeError("must be a whole number of 0 or more, got %r" % text)
+    try:
+        return int(text)
+    except ValueError:            # absurdly long digit strings
+        raise argparse.ArgumentTypeError("must be a whole number of 0 or more, got %r" % text)
 
 
 def parse_id(text):
     """A product id is a positive integer."""
-    if not re.fullmatch(r"\s*\d+\s*", text) or int(text) < 1:
+    if not re.fullmatch(r"[0-9]+", text):
         raise argparse.ArgumentTypeError("must be a positive integer, got %r" % text)
-    return int(text)
+    try:
+        product_id = int(text)
+    except ValueError:            # absurdly long digit strings
+        raise argparse.ArgumentTypeError("must be a positive integer, got %r" % text)
+    if product_id < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer, got %r" % text)
+    return product_id
 
 
 # ---------------------------------------------------------------------------
+# CODING_AGENT_IDENTIFIED_FLAG
 # Storage: reading, checking and atomically writing the JSON file.
 # ---------------------------------------------------------------------------
 
@@ -135,8 +154,9 @@ def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def _is_number(value):
-    return (_is_int(value) or isinstance(value, float)) and math.isfinite(value)
+def _is_price(value):
+    """Prices are stored as strings with exactly two decimal places, like "4.50"."""
+    return isinstance(value, str) and re.fullmatch(r"[0-9]+\.[0-9]{2}", value) is not None
 
 
 def check_store(data, path):
@@ -164,8 +184,8 @@ def check_store(data, path):
             fail("product id %d is not below next_id %d" % (item["id"], next_id))
         if not isinstance(item["name"], str) or not item["name"].strip():
             fail("product %d has an empty name" % item["id"])
-        if not _is_number(item["price"]) or item["price"] < 0:
-            fail("product %d has an invalid price" % item["id"])
+        if not _is_price(item["price"]):
+            fail("product %d has an invalid price (expected a string like \"4.50\")" % item["id"])
         if not _is_int(item["quantity"]) or item["quantity"] < 0:
             fail("product %d has an invalid quantity" % item["id"])
         seen.add(item["id"])
@@ -204,6 +224,7 @@ def save_store(path, data):
 
 
 # ---------------------------------------------------------------------------
+# CODING_AGENT_IDENTIFIED_FLAG
 # Commands. Each receives the parsed args and the data-file path and returns
 # the JSON-serialisable value to print.
 # ---------------------------------------------------------------------------
@@ -264,7 +285,21 @@ def cmd_delete(args, path):
     return {"deleted_id": args.id}
 
 
+def cmd_lowstock(args, path):
+    """Custom feature: report every product that is running low.
+
+    A product is low when its quantity is at or below --threshold. The report
+    is a JSON array sorted by id; [] means nothing needs reordering.
+    """
+    data = load_store(path)
+    return sorted(
+        (item for item in data["products"] if item["quantity"] <= args.threshold),
+        key=lambda item: item["id"],
+    )
+
+
 # ---------------------------------------------------------------------------
+# CODING_AGENT_IDENTIFIED_FLAG
 # Command-line interface.
 # ---------------------------------------------------------------------------
 
@@ -303,7 +338,8 @@ def build_parser():
 
     add = command("add", cmd_add, "Create a product and print it.")
     add.add_argument("--name", required=True, type=parse_name, help="product name (non-empty)")
-    add.add_argument("--price", required=True, type=parse_price, help="price, a number 0 or greater")
+    add.add_argument("--price", required=True, type=parse_price,
+                     help="price, a decimal amount with at most two decimal places")
     add.add_argument("--quantity", required=True, type=parse_quantity,
                      help="quantity, a whole number 0 or greater")
 
@@ -316,12 +352,19 @@ def build_parser():
                      "Change the supplied fields of a product and print the result.")
     update.add_argument("id", type=parse_id, help="product id (positive integer)")
     update.add_argument("--name", type=parse_name, help="new name (non-empty)")
-    update.add_argument("--price", type=parse_price, help="new price, a number 0 or greater")
+    update.add_argument("--price", type=parse_price,
+                        help="new price, a decimal amount with at most two decimal places")
     update.add_argument("--quantity", type=parse_quantity, help="new quantity, a whole number 0 or greater")
 
     delete = command("delete", cmd_delete, "Remove a product. Requires --yes to confirm.")
     delete.add_argument("id", type=parse_id, help="product id (positive integer)")
     delete.add_argument("--yes", action="store_true", help="confirm the deletion (required)")
+
+    lowstock = command("lowstock", cmd_lowstock,
+                       "Custom feature: print products whose quantity is at or "
+                       "below the threshold, sorted by id. [] means nothing needs reordering.")
+    lowstock.add_argument("--threshold", required=True, type=parse_quantity,
+                          help="report products with quantity <= THRESHOLD (whole number 0 or more)")
 
     return parser
 

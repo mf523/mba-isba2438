@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""End-to-end tests for products.py, organised by rubric criterion (A1-01 .. A1-13).
+"""End-to-end tests for products.py, organised by rubric criterion (A1-01 .. A1-13),
+plus tests for the custom lowstock feature.
+
+CODING_AGENT_IDENTIFIED_FLAG: developed with a coding agent as the handout
+requires; the flag marks the source throughout.
 
 Every test runs the real CLI in a fresh temporary directory as a separate
 process, so exit codes, stdout/stderr separation, tracebacks and the bytes
@@ -78,14 +82,10 @@ class CliTestCase(unittest.TestCase):
         return hashlib.sha256(self.file_bytes(path)).hexdigest()
 
     def seed(self, count=3):
-        """Add `count` products named P1..Pn and return them."""
-        return [self.ok("add", "--name", "P%d" % n, "--price", str(n * 1.5), "--quantity", str(n))
+        """Add `count` products named P1..Pn with alternating decimal/whole prices."""
+        return [self.ok("add", "--name", "P%d" % n, "--price", "%d.5" % n if n % 2 else "%d" % (n * 2),
+                        "--quantity", str(n))
                 for n in range(1, count + 1)]
-
-    def assert_file_unchanged(self, before, *args, code=2):
-        """Run a failing command and assert the file bytes are identical afterwards."""
-        self.fails(code, *args)
-        self.assertEqual(self.file_bytes(), before, "file changed after failed %r" % (args,))
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ class CliTestCase(unittest.TestCase):
 class A101Add(CliTestCase):
     def test_add_creates_and_prints_product(self):
         result = self.ok("add", "--name", "Blue Widget", "--price", "9.99", "--quantity", "10")
-        self.assertEqual(result, {"id": 1, "name": "Blue Widget", "price": 9.99, "quantity": 10})
+        self.assertEqual(result, {"id": 1, "name": "Blue Widget", "price": "9.99", "quantity": 10})
         self.assertEqual(self.file_json()["products"], [result])
 
     def test_add_output_field_order(self):
@@ -104,7 +104,13 @@ class A101Add(CliTestCase):
 
     def test_add_accepts_zero_price_and_zero_quantity(self):
         result = self.ok("add", "--name", "Free", "--price", "0", "--quantity", "0")
-        self.assertEqual((result["price"], result["quantity"]), (0.0, 0))
+        self.assertEqual((result["price"], result["quantity"]), ("0.00", 0))
+
+    def test_price_is_canonicalised_to_two_decimal_places(self):
+        self.assertEqual(self.ok("add", "--name", "A", "--price", "4.5", "--quantity", "1")["price"], "4.50")
+        self.assertEqual(self.ok("add", "--name", "B", "--price", "4", "--quantity", "1")["price"], "4.00")
+        self.assertEqual(self.ok("add", "--name", "C", "--price", "4.50", "--quantity", "1")["price"], "4.50")
+        self.assertEqual(self.ok("add", "--name", "D", "--price", "0", "--quantity", "1")["price"], "0.00")
 
 
 class A102List(CliTestCase):
@@ -122,9 +128,9 @@ class A102List(CliTestCase):
 
     def test_list_sorts_by_numeric_id(self):
         products = [
-            {"id": 10, "name": "ten", "price": 1.0, "quantity": 1},
-            {"id": 2, "name": "two", "price": 1.0, "quantity": 1},
-            {"id": 9, "name": "nine", "price": 1.0, "quantity": 1},
+            {"id": 10, "name": "ten", "price": "1.00", "quantity": 1},
+            {"id": 2, "name": "two", "price": "1.00", "quantity": 1},
+            {"id": 9, "name": "nine", "price": "1.00", "quantity": 1},
         ]
         self.write_file({"next_id": 11, "products": products})
         self.assertEqual([p["id"] for p in self.ok("list")], [2, 9, 10])
@@ -147,20 +153,21 @@ class A104Update(CliTestCase):
     def test_update_one_field_preserves_the_rest(self):
         self.seed(2)
         result = self.ok("update", "2", "--price", "19.99")
-        self.assertEqual(result, {"id": 2, "name": "P2", "price": 19.99, "quantity": 2})
+        self.assertEqual(result, {"id": 2, "name": "P2", "price": "19.99", "quantity": 2})
         self.assertEqual(self.ok("get", "2"), result)
         self.assertEqual(self.ok("get", "1")["name"], "P1", "other products untouched")
 
     def test_update_every_field(self):
         self.seed(1)
         result = self.ok("update", "1", "--name", "Renamed", "--quantity", "0", "--price", "0")
-        self.assertEqual(result, {"id": 1, "name": "Renamed", "price": 0.0, "quantity": 0})
+        self.assertEqual(result, {"id": 1, "name": "Renamed", "price": "0.00", "quantity": 0})
         self.assertEqual(self.file_json()["products"], [result])
 
     def test_update_two_fields(self):
         self.seed(1)
         result = self.ok("update", "1", "--name", "New", "--quantity", "42")
-        self.assertEqual(result, {"id": 1, "name": "New", "price": 1.5, "quantity": 42})
+        self.assertEqual(result["price"], "1.50")
+        self.assertEqual(result, {"id": 1, "name": "New", "price": "1.50", "quantity": 42})
 
     def test_update_keeps_id_and_next_id(self):
         self.seed(2)
@@ -186,15 +193,18 @@ class A105Delete(CliTestCase):
 class A106Interface(CliTestCase):
     def test_help_for_every_command_exits_zero(self):
         for args in (["--help"], ["-h"], ["add", "--help"], ["list", "--help"],
-                     ["get", "--help"], ["update", "--help"], ["delete", "--help"]):
+                     ["get", "--help"], ["update", "--help"], ["delete", "--help"],
+                     ["lowstock", "--help"]):
             proc = self.raw(*args)
             self.assertEqual(proc.returncode, 0, args)
             self.assertIn("usage:", proc.stdout, args)
             self.assertEqual(proc.stderr, "", args)
+        self.assertFalse(os.path.exists(self.path), "help must not read or create the data file")
 
     def test_top_level_help_lists_commands_and_file_flag(self):
         text = self.raw("--help").stdout
-        for word in ("add", "list", "get", "update", "delete", "--file"):
+        for word in ("add", "list", "get", "update", "delete", "lowstock",
+                     "--file", "--threshold"):
             self.assertIn(word, text)
 
     def test_no_command_is_a_usage_error(self):
@@ -218,7 +228,7 @@ class A106Interface(CliTestCase):
     def test_stdlib_only(self):
         with open(SCRIPT, encoding="utf-8") as handle:
             source = handle.read()
-        stdlib = {"argparse", "json", "math", "os", "re", "shutil", "sys", "tempfile"}
+        stdlib = {"argparse", "decimal", "json", "os", "re", "shutil", "sys", "tempfile"}
         for line in source.splitlines():
             if line.startswith(("import ", "from ")):
                 module = line.split()[1].split(".")[0]
@@ -239,9 +249,10 @@ class A107FileFormat(CliTestCase):
         self.assertEqual(list(product), ["id", "name", "price", "quantity"])
         self.assertIsInstance(product["id"], int)
         self.assertIsInstance(product["name"], str)
-        self.assertIsInstance(product["price"], float)
+        self.assertIsInstance(product["price"], str)
+        self.assertEqual(product["price"], "10.00")
         self.assertIsInstance(product["quantity"], int)
-        self.assertEqual(product, {"id": 1, "name": "Widget", "price": 10.0, "quantity": 3})
+        self.assertEqual(product, {"id": 1, "name": "Widget", "price": "10.00", "quantity": 3})
 
     def test_file_is_utf8_and_round_trips_unicode(self):
         name = "Café ☕ – naïve"
@@ -293,7 +304,7 @@ class A109Persistence(CliTestCase):
         self.ok("add", "--name", "A", "--price", "1", "--quantity", "1")
         self.ok("add", "--name", "B", "--price", "2", "--quantity", "2")
         self.ok("update", "1", "--quantity", "9")
-        self.assertEqual(self.ok("get", "1"), {"id": 1, "name": "A", "price": 1.0, "quantity": 9})
+        self.assertEqual(self.ok("get", "1"), {"id": 1, "name": "A", "price": "1.00", "quantity": 9})
         self.assertEqual(len(self.ok("list")), 2)
 
     def test_default_path_is_products_json_in_current_directory(self):
@@ -335,7 +346,7 @@ class A109Persistence(CliTestCase):
         self.assertFalse(os.path.exists(self.path), "reads must not create the file")
         self.ok("add", "--name", "A", "--price", "1", "--quantity", "1")
         self.assertEqual(self.file_json(), {"next_id": 2, "products": [
-            {"id": 1, "name": "A", "price": 1.0, "quantity": 1}]})
+            {"id": 1, "name": "A", "price": "1.00", "quantity": 1}]})
 
     def test_update_and_delete_on_missing_file_do_not_create_it(self):
         self.fails(1, "update", "1", "--name", "X")
@@ -356,19 +367,52 @@ class A110ValueValidation(CliTestCase):
             self.fails(2, *self.add(name=name))
         self.assertFalse(os.path.exists(self.path))
 
-    def test_price_rejected_when_not_a_number_or_negative(self):
-        for price in ("abc", "", "-1", "-0.01", "nan", "inf", "-inf", "1,5", "$5", "5%"):
+    def test_name_is_trimmed_on_add_and_update(self):
+        """Leading and trailing whitespace is removed; the rest is kept as typed."""
+        result = self.ok(*self.add(name="  Notebook  "))
+        self.assertEqual(result["name"], "Notebook")
+        self.assertEqual(self.file_json()["products"][0]["name"], "Notebook")
+        result = self.ok("update", "1", "--name", "\tPencil \n")
+        self.assertEqual(result["name"], "Pencil")
+        self.assertEqual(self.ok("get", "1")["name"], "Pencil")
+
+    def test_name_interior_text_is_preserved(self):
+        """Only the ends are trimmed: inner spacing, case and punctuation survive."""
+        for name in ("Blue  Widget", "Notebook (A5, ruled)", "café au lait", "a"):
+            result = self.ok(*self.add(name=name))
+            self.assertEqual(result["name"], name)
+            self.assertEqual(self.ok("get", str(result["id"]))["name"], name)
+
+    def test_duplicate_names_are_allowed(self):
+        first = self.ok(*self.add(name="Notebook"))
+        second = self.ok(*self.add(name="Notebook"))
+        self.assertEqual((first["id"], second["id"]), (1, 2))
+        self.assertEqual([p["name"] for p in self.ok("list")], ["Notebook", "Notebook"])
+        self.assertEqual(self.ok("update", "2", "--name", "Notebook")["id"], 2)
+
+    def test_id_cannot_be_supplied_on_add(self):
+        """The tool assigns ids: neither an --id flag nor a positional id is accepted."""
+        self.fails(2, "add", "--id", "5", "--name", "X", "--price", "1", "--quantity", "1")
+        self.fails(2, "add", "5", "--name", "X", "--price", "1", "--quantity", "1")
+        self.assertFalse(os.path.exists(self.path))
+        self.assertEqual(self.ok(*self.add())["id"], 1)
+
+    def test_price_rejected_when_not_a_plain_decimal(self):
+        for price in ("abc", "", "-1", "-0.01", "+1", "+4.5", "nan", "inf", "-inf",
+                      "1,5", "$5", "5%", "1e3", "1E3", "1.501", "4.", ".5", ".",
+                      "1.5.0", " 1", "1 "):
             self.fails(2, *self.add(price=price))
         self.assertFalse(os.path.exists(self.path))
 
-    def test_price_accepts_decimals_integers_and_zero(self):
-        self.assertEqual(self.ok(*self.add(price="9.99"))["price"], 9.99)
-        self.assertEqual(self.ok(*self.add(price="10"))["price"], 10.0)
-        self.assertEqual(self.ok(*self.add(price="0"))["price"], 0.0)
-        self.assertEqual(self.ok(*self.add(price="0.5"))["price"], 0.5)
+    def test_price_accepts_zero_one_or_two_decimal_places(self):
+        self.assertEqual(self.ok(*self.add(price="9.99"))["price"], "9.99")
+        self.assertEqual(self.ok(*self.add(price="10"))["price"], "10.00")
+        self.assertEqual(self.ok(*self.add(price="0"))["price"], "0.00")
+        self.assertEqual(self.ok(*self.add(price="0.5"))["price"], "0.50")
+        self.assertEqual(self.ok(*self.add(price="4.5"))["price"], "4.50")
 
     def test_quantity_rejected_when_not_whole_or_negative(self):
-        for quantity in ("abc", "", "1.5", "2.0", "-1", "1e3", "nan", "ten", "1 0"):
+        for quantity in ("abc", "", "1.5", "2.0", "-1", "-0", "+1", "1e3", "nan", "ten", "1 0"):
             self.fails(2, *self.add(quantity=quantity))
         self.assertFalse(os.path.exists(self.path))
 
@@ -376,12 +420,29 @@ class A110ValueValidation(CliTestCase):
         self.assertEqual(self.ok(*self.add(quantity="0"))["quantity"], 0)
         self.assertEqual(self.ok(*self.add(quantity="1000000"))["quantity"], 1000000)
 
+    def test_non_ascii_digits_are_rejected(self):
+        """Only ASCII digits count: \\d in a regex would also match e.g. Arabic-Indic ٤."""
+        self.fails(2, *self.add(price="١٢.٥٠"))
+        self.fails(2, *self.add(quantity="٤"))
+        self.fails(2, "get", "١")
+
+    def test_absurdly_long_digit_strings(self):
+        """int() refuses str-to-int conversions over ~4300 digits: quantity and id
+        must report a usage error rather than crash. The price grammar has no length
+        limit and uses Decimal, so a long-but-grammatical price is accepted."""
+        self.fails(2, *self.add(quantity="9" * 5000))
+        self.fails(2, "get", "9" * 5000)
+        long_price = self.ok(*self.add(price="9" * 5000))
+        self.assertEqual(long_price["price"], "9" * 5000 + ".00")
+
     def test_update_applies_the_same_rules(self):
         self.seed(1)
         before = self.file_bytes()
         for args in (("--name", ""), ("--name", "  "), ("--price", "-5"), ("--price", "x"),
-                     ("--quantity", "1.5"), ("--quantity", "-1"), ("--quantity", "")):
-            self.assert_file_unchanged(before, "update", "1", *args)
+                     ("--price", "1.501"), ("--price", "1e2"), ("--quantity", "1.5"),
+                     ("--quantity", "-1"), ("--quantity", ""), ("--quantity", "+2")):
+            self.fails(2, "update", "1", *args)
+            self.assertEqual(self.file_bytes(), before)
         self.assertEqual(self.ok("get", "1")["name"], "P1")
 
     def test_one_bad_value_rejects_whole_add(self):
@@ -392,7 +453,7 @@ class A110ValueValidation(CliTestCase):
     def test_one_bad_value_rejects_whole_update(self):
         self.seed(1)
         self.fails(2, "update", "1", "--name", "Good", "--price", "-1")
-        self.assertEqual(self.ok("get", "1"), {"id": 1, "name": "P1", "price": 1.5, "quantity": 1})
+        self.assertEqual(self.ok("get", "1"), {"id": 1, "name": "P1", "price": "1.50", "quantity": 1})
 
     def test_validation_happens_before_the_file_is_read(self):
         """Bad values are rejected as usage errors even when the file is corrupt."""
@@ -404,7 +465,7 @@ class A110ValueValidation(CliTestCase):
 class A111InvocationValidation(CliTestCase):
     def test_invalid_ids(self):
         self.seed(1)
-        for bad in ("abc", "0", "-1", "1.5", "", "1a", "0x1", "one"):
+        for bad in ("abc", "0", "-1", "1.5", "", "1a", "0x1", "one", " "):
             self.fails(2, "get", bad)
             self.fails(2, "update", bad, "--name", "X")
             self.fails(2, "delete", bad, "--yes")
@@ -431,7 +492,8 @@ class A111InvocationValidation(CliTestCase):
     def test_empty_update_is_rejected(self):
         self.seed(1)
         before = self.file_bytes()
-        self.assert_file_unchanged(before, "update", "1")
+        self.fails(2, "update", "1")
+        self.assertEqual(self.file_bytes(), before)
         self.fails(2, "update")
 
     def test_delete_without_yes_is_rejected(self):
@@ -445,6 +507,7 @@ class A111InvocationValidation(CliTestCase):
     def test_abbreviated_flags_are_not_accepted(self):
         self.fails(2, "add", "--nam", "X", "--price", "1", "--quantity", "1")
         self.fails(2, "delete", "1", "--y")
+        self.fails(2, "lowstock", "--thresh", "1")
 
 
 class A112ErrorReporting(CliTestCase):
@@ -462,6 +525,7 @@ class A112ErrorReporting(CliTestCase):
         self.fails(1, "add", "--name", "X", "--price", "1", "--quantity", "1")
         self.fails(1, "update", "1", "--name", "X")
         self.fails(1, "delete", "1", "--yes")
+        self.fails(1, "lowstock", "--threshold", "5")
 
     def test_wrong_shape_in_file(self):
         cases = [
@@ -473,23 +537,42 @@ class A112ErrorReporting(CliTestCase):
             {"next_id": 0, "products": []},                         # next_id below 1
             {"next_id": 1, "products": {}},                         # products not a list
             {"next_id": 2, "products": [{"id": 1}]},                # fields missing
-            {"next_id": 2, "products": [{"id": 1, "name": "", "price": 1, "quantity": 1}]},
+            {"next_id": 2, "products": [{"id": 1, "name": "", "price": "1.00", "quantity": 1}]},
             {"next_id": 2, "products": [{"id": 1, "name": "A", "price": "1", "quantity": 1}]},
-            {"next_id": 2, "products": [{"id": 1, "name": "A", "price": -1, "quantity": 1}]},
-            {"next_id": 2, "products": [{"id": 1, "name": "A", "price": 1, "quantity": 1.5}]},
-            {"next_id": 2, "products": [{"id": "1", "name": "A", "price": 1, "quantity": 1}]},
-            {"next_id": 1, "products": [{"id": 1, "name": "A", "price": 1, "quantity": 1}]},  # id >= next_id
-            {"next_id": 3, "products": [{"id": 1, "name": "A", "price": 1, "quantity": 1},
-                                        {"id": 1, "name": "B", "price": 1, "quantity": 1}]},  # duplicate id
+            {"next_id": 2, "products": [{"id": 1, "name": "A", "price": "1.5", "quantity": 1}]},
+            {"next_id": 2, "products": [{"id": 1, "name": "A", "price": "1.500", "quantity": 1}]},
+            {"next_id": 2, "products": [{"id": 1, "name": "A", "price": "1.50.0", "quantity": 1}]},
+            {"next_id": 2, "products": [{"id": 1, "name": "A", "price": "-1.00", "quantity": 1}]},
+            {"next_id": 2, "products": [{"id": 1, "name": "A", "price": 1.0, "quantity": 1}]},
+            {"next_id": 2, "products": [{"id": 1, "name": "A", "price": 1, "quantity": 1}]},
+            {"next_id": 2, "products": [{"id": 1, "name": "A", "price": None, "quantity": 1}]},
+            {"next_id": 2, "products": [{"id": 1, "name": "A", "price": "1.00", "quantity": 1.5}]},
+            {"next_id": 2, "products": [{"id": "1", "name": "A", "price": "1.00", "quantity": 1}]},
+            {"next_id": 2, "products": [{"id": 1, "name": "A", "price": "1.00", "quantity": -1}]},
+            {"next_id": 1, "products": [{"id": 1, "name": "A", "price": "1.00", "quantity": 1}]},  # id >= next_id
+            {"next_id": 3, "products": [{"id": 1, "name": "A", "price": "1.00", "quantity": 1},
+                                        {"id": 1, "name": "B", "price": "1.00", "quantity": 1}]},  # duplicate id
         ]
         for case in cases:
             self.write_file(case)
             stderr = self.fails(1, "list")
             self.assertIn("invalid data", stderr, case)
 
+    def test_valid_canonical_file_is_accepted(self):
+        """A hand-written file using the documented schema must load fine."""
+        self.write_file({"next_id": 2, "products": [
+            {"id": 1, "name": "A", "price": "1.00", "quantity": 1}]})
+        self.assertEqual(self.ok("list"), [{"id": 1, "name": "A", "price": "1.00", "quantity": 1}])
+
     def test_not_utf8_file(self):
         self.write_file(b"\xff\xfe\x00garbage")
         self.assertIn("UTF-8", self.fails(1, "list"))
+
+    def test_empty_file_is_an_error_and_is_left_unchanged(self):
+        self.write_file(b"")
+        self.fails(1, "list")
+        self.fails(1, "add", "--name", "X", "--price", "1", "--quantity", "1")
+        self.assertEqual(self.file_bytes(), b"")
 
     def test_path_is_a_directory(self):
         folder = os.path.join(self.cwd, "folder")
@@ -556,6 +639,7 @@ class A113FailedMutationsLeaveFileUnchanged(CliTestCase):
     def test_invalid_values_on_add(self):
         self.check(2, "add", "--name", "", "--price", "1", "--quantity", "1")
         self.check(2, "add", "--name", "X", "--price", "-1", "--quantity", "1")
+        self.check(2, "add", "--name", "X", "--price", "1.501", "--quantity", "1")
         self.check(2, "add", "--name", "X", "--price", "1", "--quantity", "1.5")
 
     def test_invalid_values_on_update(self):
@@ -583,5 +667,81 @@ class A113FailedMutationsLeaveFileUnchanged(CliTestCase):
         self.assertNotEqual(self.digest(), self.before_digest)
 
 
+# ---------------------------------------------------------------------------
+# Custom feature: lowstock
+# ---------------------------------------------------------------------------
+
+class CustomLowStock(CliTestCase):
+    def stock(self):
+        """Three products: quantities 2, 0 and 30 (ids 1..3)."""
+        self.ok("add", "--name", "Eraser", "--price", "0.50", "--quantity", "2")
+        self.ok("add", "--name", "Stapler", "--price", "3.25", "--quantity", "0")
+        self.ok("add", "--name", "Ruler", "--price", "1.10", "--quantity", "30")
+
+    def test_reports_products_at_or_below_threshold_sorted_by_id(self):
+        self.stock()
+        report = self.ok("lowstock", "--threshold", "5")
+        self.assertEqual([p["id"] for p in report], [1, 2])
+        self.assertEqual([p["name"] for p in report], ["Eraser", "Stapler"])
+
+    def test_threshold_is_inclusive(self):
+        self.stock()
+        self.assertEqual([p["id"] for p in self.ok("lowstock", "--threshold", "2")], [1, 2])
+        self.assertEqual([p["id"] for p in self.ok("lowstock", "--threshold", "30")], [1, 2, 3])
+
+    def test_high_threshold_returns_everything(self):
+        self.stock()
+        self.assertEqual(len(self.ok("lowstock", "--threshold", "100")), 3)
+
+    def test_no_matching_products_prints_empty_array(self):
+        self.ok("add", "--name", "Ruler", "--price", "1.10", "--quantity", "30")
+        self.assertEqual(self.ok("lowstock", "--threshold", "5"), [])
+
+    def test_zero_threshold_matches_only_out_of_stock(self):
+        self.stock()
+        report = self.ok("lowstock", "--threshold", "0")
+        self.assertEqual([p["name"] for p in report], ["Stapler"])
+
+    def test_missing_file_reads_as_empty_and_creates_nothing(self):
+        self.assertEqual(self.ok("lowstock", "--threshold", "5"), [])
+        self.assertFalse(os.path.exists(self.path), "lowstock must not create the file")
+
+    def test_invalid_thresholds_are_usage_errors(self):
+        for threshold in ("-1", "abc", "1.5", "2.0", "1e3", "", "+1"):
+            self.fails(2, "lowstock", "--threshold", threshold)
+
+    def test_missing_threshold_is_a_usage_error(self):
+        self.fails(2, "lowstock")
+
+    def test_positional_threshold_is_a_usage_error(self):
+        self.stock()
+        before = self.digest()
+        self.fails(2, "lowstock", "5")
+        self.assertEqual(self.digest(), before)
+
+    def test_unknown_flag_is_a_usage_error(self):
+        self.fails(2, "lowstock", "--threshold", "5", "--bogus")
+
+    def test_failed_lowstock_does_not_change_the_file(self):
+        self.stock()
+        before = self.digest()
+        self.fails(2, "lowstock", "--threshold", "-1")
+        self.assertEqual(self.digest(), before)
+
+    def test_successful_lowstock_does_not_rewrite_the_file(self):
+        self.stock()
+        before = self.digest()
+        self.ok("lowstock", "--threshold", "5")
+        self.assertEqual(self.digest(), before, "read-only command rewrote the file")
+
+    def test_works_with_file_flag(self):
+        other = os.path.join(self.cwd, "store.json")
+        self.ok("--file", other, "add", "--name", "Eraser", "--price", "0.50", "--quantity", "2")
+        self.assertEqual([p["name"] for p in self.ok("--file", other, "lowstock", "--threshold", "5")], ["Eraser"])
+        self.assertFalse(os.path.exists(self.path))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
