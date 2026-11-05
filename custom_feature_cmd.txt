@@ -1,6 +1,6 @@
-# custom_feature_cmd.txt - commands for demo.sh: the custom lowstock feature.
+# custom_feature_cmd.txt - commands for run_cmd.sh: the custom lowstock feature.
 # CODING_AGENT_IDENTIFIED_FLAG
-# Run with: ./demo.sh custom_feature_cmd.txt   (format: see command_output_cmd.txt)
+# Run with: ./run_cmd.sh custom_feature_cmd.txt   (format: see command_output_cmd.txt)
 # The custom feature is not one of the rubric groups, so no command here is tagged.
 
 == 0. Setup

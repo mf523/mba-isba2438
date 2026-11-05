@@ -1,6 +1,6 @@
-# validation_errors_cmd.txt - commands for demo.sh: Validation and errors (rubric A1-10 to A1-13).
+# validation_errors_cmd.txt - commands for run_cmd.sh: Validation and errors (rubric A1-10 to A1-13).
 # CODING_AGENT_IDENTIFIED_FLAG
-# Run with: ./demo.sh validation_errors_cmd.txt   (format: see command_output_cmd.txt)
+# Run with: ./run_cmd.sh validation_errors_cmd.txt   (format: see command_output_cmd.txt)
 # A1-15 is also carried by its invalid-value (section 2), unconfirmed-deletion (end of
 # section 3) and missing-ID (section 4) checks.
 

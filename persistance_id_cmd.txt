@@ -1,6 +1,6 @@
-# persistance_id_cmd.txt - commands for demo.sh: Persistence and IDs (rubric A1-07 to A1-09).
+# persistance_id_cmd.txt - commands for run_cmd.sh: Persistence and IDs (rubric A1-07 to A1-09).
 # CODING_AGENT_IDENTIFIED_FLAG
-# Run with: ./demo.sh persistance_id_cmd.txt   (format: see command_output_cmd.txt)
+# Run with: ./run_cmd.sh persistance_id_cmd.txt   (format: see command_output_cmd.txt)
 # Sections 2 and 4 also carry A1-15: they are its persistence and --file checks.
 
 == 0. Setup

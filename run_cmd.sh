@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# demo.sh - runs one demo command file, pausing after every command.
+# run_cmd.sh - runs one demo command file, pausing after every command.
 #
-#   usage: ./demo.sh CMD_FILE
+#   usage: ./run_cmd.sh CMD_FILE
 #
-#   ./demo.sh command_output_cmd.txt      the handout's success sequence
-#   ./demo.sh persistance_id_cmd.txt      persistence and IDs (A1-07 to A1-09)
-#   ./demo.sh validation_errors_cmd.txt   validation and errors (A1-10 to A1-13)
-#   ./demo.sh custom_feature_cmd.txt      the custom lowstock feature
+#   ./run_cmd.sh demo_cmd.txt                the whole recording, in handout order
+#   ./run_cmd.sh command_output_cmd.txt      the handout's success sequence
+#   ./run_cmd.sh persistance_id_cmd.txt      persistence and IDs (A1-07 to A1-09)
+#   ./run_cmd.sh validation_errors_cmd.txt   validation and errors (A1-10 to A1-13)
+#   ./run_cmd.sh custom_feature_cmd.txt      the custom lowstock feature
 #
 # The commands live in the *_cmd.txt files; see command_output_cmd.txt for the format.
 # At each pause, press <space> to continue.
@@ -23,7 +24,7 @@ if [ "$#" -ne 1 ]; then
   exit 2
 fi
 CMDS="$1"
-[ -f "$CMDS" ] && [ -r "$CMDS" ] || { echo "demo.sh: cannot read command file: $CMDS" >&2; exit 1; }
+[ -f "$CMDS" ] && [ -r "$CMDS" ] || { echo "run_cmd.sh: cannot read command file: $CMDS" >&2; exit 1; }
 CMDS="$(cd "$(dirname "$CMDS")" && pwd)/$(basename "$CMDS")"
 TMP="${TMPDIR:-/tmp}"
 WORK="$(mktemp -d "${TMP%/}/products-demo.XXXXXX")"

@@ -1,7 +1,7 @@
-# command_output_cmd.txt - commands for demo.sh: the required success sequence from the handout.
+# command_output_cmd.txt - commands for run_cmd.sh: the required success sequence from the handout.
 # CODING_AGENT_IDENTIFIED_FLAG
 #
-# Line format (read by demo.sh):
+# Line format (read by run_cmd.sh):
 #   == TEXT            stage heading
 #   # TEXT             note shown on screen (lines before the first heading, like these, are skipped)
 #   blank              ignored

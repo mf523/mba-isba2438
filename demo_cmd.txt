@@ -1,7 +1,7 @@
-# demo_cmd.txt - commands for demo.sh: the whole recorded demonstration, in the order
+# demo_cmd.txt - commands for run_cmd.sh: the whole recorded demonstration, in the order
 # the handout lists it ("Demonstration and Submission").
 # CODING_AGENT_IDENTIFIED_FLAG
-# Run with: ./demo.sh demo_cmd.txt   (format: see command_output_cmd.txt)
+# Run with: ./run_cmd.sh demo_cmd.txt   (format: see command_output_cmd.txt)
 # Tags name the recording criteria: A1-14 success sequence and final data,
 # A1-15 persistence / --file / missing ID / invalid value / unconfirmed deletion,
 # A1-16 explaining the code. "SAY:" notes are prompts for what to explain aloud.
