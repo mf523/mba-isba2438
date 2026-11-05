@@ -10,10 +10,9 @@ and prints a one-line error on failure.
 
 ## Quick start
 
-Run everything from inside the `assignment1` folder:
+Run everything from the repository root:
 
 ```sh
-cd assignment1
 python3 products.py add --name "Blue Widget" --price 9.99 --quantity 10
 python3 products.py list
 python3 products.py get 1

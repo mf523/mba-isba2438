@@ -4,12 +4,16 @@
 #   ./demo.sh            run the whole walkthrough top to bottom
 #   ./demo.sh --pause    wait for Enter after each command (handy while recording)
 #
+# CODING_AGENT_IDENTIFIED_FLAG: developed with a coding agent as the handout
+# requires; the flag marks the source throughout.
+#
 # It copies products.py into a fresh scratch directory and runs there, so the
 # repository stays clean and the script can be rerun any number of times.
 # Sections are labelled with the rubric criteria they demonstrate.
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/products-demo.XXXXXX")"
+TMP="${TMPDIR:-/tmp}"
+WORK="$(mktemp -d "${TMP%/}/products-demo.XXXXXX")"
 cp "$REPO/products.py" "$WORK/"
 cd "$WORK" || exit 1
 
@@ -38,34 +42,25 @@ run 'pwd'
 run 'ls'
 run 'python3 products.py --help'
 
-heading "1. Success sequence (A1-14)"
+heading "1. Required success sequence (A1-14)"
 note "list with no data file at all prints an empty array"
 run 'python3 products.py list'
-run 'python3 products.py add --name "Blue Widget" --price 9.99 --quantity 10'
-run 'python3 products.py add --name "Red Gadget" --price 24.50 --quantity 3'
-run 'python3 products.py add --name "Green Gizmo" --price 4.25 --quantity 100'
+run 'python3 products.py add --name "Notebook" --price 4.5 --quantity 10'
+run 'python3 products.py add --name "Pencil" --price 1.25 --quantity 5'
 run 'python3 products.py list'
-run 'python3 products.py get 2'
-note "update only the supplied fields: the name is preserved"
-run 'python3 products.py update 2 --price 19.99 --quantity 5'
-note "and here price and quantity are preserved"
-run 'python3 products.py update 1 --name "Blue Widget Pro"'
-run 'python3 products.py delete 3 --yes'
-run 'python3 products.py list'
-note "next_id stays at 4 after deleting id 3, so the next add gets id 4 and 3 is never reused"
-run 'cat products.json'
-run 'python3 products.py add --name "Yellow Thing" --price 1 --quantity 1'
-
-heading "1b. Final data (A1-14)"
-run 'python3 products.py list'
-run 'cat products.json'
-
-heading "2. Persistence (A1-15)"
-note "Every command above ran as its own process. A brand-new invocation still sees the data:"
-run 'ls -l products.json'
 run 'python3 products.py get 1'
+note "update only the supplied field: name and price are preserved"
+run 'python3 products.py update 1 --quantity 12'
+run 'python3 products.py delete 2 --yes'
+run 'python3 products.py list'
+note "final data: only Notebook, price \"4.50\", quantity 12, next_id stays 3"
+run 'cat products.json'
+note "a brand-new invocation still reads the saved data"
+run 'python3 products.py get 1'
+note "delete 2 freed nothing: next_id is still 3, so the next add gets id 3"
+run 'python3 products.py add --name "Ruler" --price 2 --quantity 30'
 
-heading "3. --file (A1-15)"
+heading "2. --file with a separate data file (A1-15)"
 note "--file points at a different data file; it works before or after the command name"
 run 'python3 products.py --file store.json list'
 run 'python3 products.py --file store.json add --name "Only In Store" --price 2.50 --quantity 7'
@@ -74,31 +69,44 @@ run 'cat store.json'
 note "the default products.json is unaffected"
 run 'python3 products.py list'
 
-heading "4. Missing ID (A1-15, A1-12)"
+heading "3. Missing ID (A1-15, A1-12)"
 note "checksum of the data file before the failing commands"
 run "$SHA products.json"
 run 'python3 products.py get 99'
 run 'python3 products.py update 99 --price 1'
 run 'python3 products.py delete 99 --yes'
 
-heading "5. Invalid values and invocations (A1-15, A1-10, A1-11)"
+heading "4. Invalid values and invocations (A1-15, A1-10, A1-11)"
 run 'python3 products.py add --name "" --price 1 --quantity 1'
 run 'python3 products.py add --name "Bad Price" --price -5 --quantity 1'
 run 'python3 products.py add --name "Bad Price" --price abc --quantity 1'
+run 'python3 products.py add --name "Bad Price" --price 1.501 --quantity 1'
 run 'python3 products.py update 1 --quantity 2.5'
 note "an update with no fields is rejected"
 run 'python3 products.py update 1'
 run 'python3 products.py get abc'
 run 'python3 products.py add --name "Missing flags"'
 
-heading "6. Unconfirmed deletion (A1-15, A1-11)"
+heading "5. Unconfirmed deletion (A1-15, A1-11)"
 run 'python3 products.py delete 1'
 note "product 1 is still there"
 run 'python3 products.py get 1'
 
-heading "7. None of the failures touched the file (A1-13)"
-note "same checksum as in section 4"
+heading "6. None of the failures touched the file (A1-13)"
+note "same checksum as in section 3"
 run "$SHA products.json"
+
+heading "7. Custom feature: lowstock (required demo)"
+note "lowstock --threshold N lists products with quantity <= N, sorted by id"
+run 'python3 products.py add --name "Eraser" --price 0.5 --quantity 2'
+run 'python3 products.py add --name "Stapler" --price 3.25 --quantity 0'
+run 'python3 products.py lowstock --threshold 5'
+note "edge case 1: nothing at or below the threshold prints []"
+run 'python3 products.py --file store.json lowstock --threshold 5'
+note "edge case 2: an invalid threshold is a usage error, not a crash"
+run 'python3 products.py lowstock --threshold -1'
+run 'python3 products.py lowstock --threshold 2.5'
+run 'python3 products.py lowstock --help'
 
 heading "8. Invalid stored data and file errors (A1-12, A1-13)"
 run 'printf "{ not json" > broken.json'

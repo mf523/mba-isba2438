@@ -1,3 +1,15 @@
+# data files created by running the tool
+products.json
+*.json.bak
+
+# scratch data used while trying things out (keep demo source files only)
+store.json
+inventory.json
+broken.json
+
+# python
 __pycache__/
 *.pyc
+
+# atomic-write temp files (should never survive, just in case)
 .products-*.tmp
