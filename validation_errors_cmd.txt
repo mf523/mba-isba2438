@@ -14,8 +14,10 @@ ls
 python3 products.py add --name "Notebook" --price 4.5 --quantity 10
 python3 products.py add --name "Pencil" --price 1.25 --quantity 5
 [A1-13] cat products.json
-# record the file checksum; every failure below must leave it unchanged
-[A1-13] shasum -a 256 products.json
+# keep an untouched copy, then record both checksums; every failure below
+# must leave products.json identical to the copy
+[A1-13] cp products.json products.json.orig
+[A1-13] shasum -a 256 products.json products.json.orig
 
 == 2. Invalid field values are rejected before saving
 # name: empty or whitespace-only
@@ -58,8 +60,9 @@ python3 products.py add --name "Pencil" --price 1.25 --quantity 5
 [A1-12, A1-15] python3 products.py delete 99 --yes
 
 == 5. Every failed mutation left the file unchanged
-# same checksum as in section 1, and next_id is still 3
-[A1-13] shasum -a 256 products.json
+# products.json still has the same checksum as the untouched copy from section 1,
+# and next_id is still 3
+[A1-13] shasum -a 256 products.json products.json.orig
 [A1-13] cat products.json
 
 == 6. Invalid stored data and file errors
