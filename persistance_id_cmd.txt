@@ -1,0 +1,48 @@
+# persistance_id_cmd.txt - commands for demo.sh: Persistence and IDs (rubric A1-07 to A1-09).
+# CODING_AGENT_IDENTIFIED_FLAG
+# Run with: ./demo.sh persistance_id_cmd.txt   (format: see command_output_cmd.txt)
+# Sections 2 and 4 also carry A1-15: they are its persistence and --file checks.
+
+== 0. Setup
+# Fresh scratch directory with only products.py; no data file yet.
+pwd
+ls
+
+== 1. A missing data file is an empty store
+# list prints [] and creates nothing
+[A1-09] python3 products.py list
+[A1-09] ls
+
+== 2. Persistence across invocations
+# each command below is a separate python3 process
+[A1-08, A1-15] python3 products.py add --name "Notebook" --price 4.5 --quantity 10
+[A1-08, A1-15] python3 products.py add --name "Pencil" --price 1.25 --quantity 5
+# the first add created the default file products.json
+[A1-09, A1-15] ls
+# UTF-8 JSON with next_id and a products array; price stored as "4.50"
+[A1-07, A1-15] cat products.json
+# a new process reads back what the earlier processes saved
+[A1-09, A1-15] python3 products.py list
+[A1-09, A1-15] python3 products.py update 1 --quantity 12
+# yet another process sees the update
+[A1-09, A1-15] python3 products.py get 1
+
+== 3. IDs are never reused
+[A1-08] python3 products.py delete 2 --yes
+# deleting id 2 does not change next_id: it stays 3
+[A1-08] cat products.json
+# so the next add gets id 3, not the freed id 2
+[A1-08] python3 products.py add --name "Ruler" --price 2 --quantity 30
+[A1-08] cat products.json
+
+== 4. --file selects a separate data file
+# a file that does not exist yet behaves as empty data
+[A1-09, A1-15] python3 products.py --file store.json list
+# --file before the command name
+[A1-09, A1-15] python3 products.py --file store.json add --name "Store Item" --price 2.50 --quantity 7
+# --file after the command name works too
+[A1-09, A1-15] python3 products.py list --file store.json
+# the new file starts its own ids at 1
+[A1-09, A1-15] cat store.json
+# the default products.json is untouched
+[A1-09, A1-15] python3 products.py list

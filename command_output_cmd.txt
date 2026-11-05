@@ -1,0 +1,40 @@
+# command_output_cmd.txt - commands for demo.sh: the required success sequence from the handout.
+# CODING_AGENT_IDENTIFIED_FLAG
+#
+# Line format (read by demo.sh):
+#   == TEXT            stage heading
+#   # TEXT             note shown on screen (lines before the first heading, like these, are skipped)
+#   blank              ignored
+#   [TAG] COMMAND      a command labelled with the rubric criterion it demonstrates,
+#                      taken from the group the file covers (here A1-01 to A1-06);
+#                      in this file every step of the success sequence also carries A1-14
+#   COMMAND            any other line: a shell command, run in the scratch directory,
+#                      then a <space> pause
+
+== 0. Setup
+# A scratch directory holding a copy of products.py.
+pwd
+# no products.json exists yet
+[A1-14] ls
+
+== 1. Required success sequence
+# the two adds assign ids 1 and 2
+[A1-01, A1-14] python3 products.py add --name "Notebook" --price 4.5 --quantity 10
+[A1-01, A1-14] python3 products.py add --name "Pencil" --price 1.25 --quantity 5
+[A1-02, A1-14] python3 products.py list
+[A1-03, A1-14] python3 products.py get 1
+# update only the supplied field: name and price are preserved
+[A1-04, A1-14] python3 products.py update 1 --quantity 12
+[A1-05, A1-14] python3 products.py delete 2 --yes
+# final list: only Notebook, price "4.50", quantity 12
+[A1-02, A1-14] python3 products.py list
+# the eight commands from the handout, in order, starting with no products.json
+[A1-06, A1-14] python3 products.py --help
+
+== 2. Expected final data
+# the saved JSON file: only Notebook remains and next_id stays 3
+[A1-14] cat products.json
+
+== 3. A later invocation reads the saved data
+# a brand-new python3 process loads products.json from disk
+[A1-03, A1-14] python3 products.py get 1

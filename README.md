@@ -169,20 +169,23 @@ python3 -m unittest -v
 ## Recording the demonstration
 
 ```sh
-./demo.sh            # runs everything top to bottom
-./demo.sh --pause    # waits for Enter after each command, easier to narrate
+./demo.sh command_output_cmd.txt      # the handout's success sequence
+./demo.sh persistance_id_cmd.txt      # persistence and IDs (A1-07 to A1-09)
+./demo.sh validation_errors_cmd.txt   # validation and errors (A1-10 to A1-13)
+./demo.sh custom_feature_cmd.txt      # the custom lowstock feature
 ```
 
-The script copies `products.py` into a scratch directory and runs there, so it is safe to rerun. Each section is labelled with the rubric criterion it covers:
+`demo.sh` takes exactly one command file, reads it line by line and pauses after every command; press <space> to continue. Each run copies `products.py` into a fresh scratch directory and runs there, so it is safe to rerun. In a command file, `== ` starts a stage heading, `# ` is a note shown on screen, blank lines are ignored and every other line is a command. A command may start with a rubric tag such as `[A1-03]`; it is shown in yellow next to the command so the recording names the criterion each step demonstrates. Each tagged command carries exactly one criterion, taken from the group its file covers (A1-01–06, A1-07–09 or A1-10–13); the custom-feature file is untagged.
 
-1. Success sequence, matching the handout script exactly: `list` on an empty store, Notebook and Pencil adds, `list`, `get 1`, `update 1 --quantity 12`, `delete 2 --yes`, final `list`, the file contents (`next_id` stays 3), a later invocation reading the saved data, and an `add` that proves the deleted id is not reused.
-2. `--file`: a second data file, the flag before and after the command, and the default file left untouched.
-3. Missing id on `get`, `update` and `delete`.
-4. Invalid values and invocations: empty name, negative and non-numeric price, three-decimal price, decimal quantity, empty update, non-numeric id, missing flags.
-5. Unconfirmed deletion: `delete 1` without `--yes` is rejected and product 1 is still there.
-6. A checksum showing the file is byte-for-byte unchanged after every failure above.
-7. Custom feature: a `lowstock` success, the `[]` no-match edge case, invalid thresholds, and `lowstock --help`.
-8. Invalid stored data and a write to a directory that does not exist.
+**`command_output_cmd.txt` — the handout's success sequence.** Starting with no `products.json`, it runs the handout's eight commands in order: `--help`, the Notebook and Pencil adds (ids 1 and 2), `list`, `get 1`, `update 1 --quantity 12`, `delete 2 --yes`, and the final `list`. It then shows the saved file (only Notebook, `"4.50"`, quantity 12, `next_id` 3) and a later invocation reading the saved data.
+
+**`persistance_id_cmd.txt` — persistence and IDs (A1-07 to A1-09).** A missing data file lists as `[]` and is not created; adds in separate processes are saved and read back; the file has the `next_id`/`products` shape; deleting id 2 leaves `next_id` at 3, so the next add gets id 3; `--file` works before or after the command and leaves `products.json` untouched.
+
+**`validation_errors_cmd.txt` — validation and errors (A1-10 to A1-13).** Invalid names, prices and quantities on `add` and `update`; invalid ids, unknown commands and flags, extra arguments, missing flags, an empty update and `delete` without `--yes`; missing ids on `get`, `update` and `delete`; a checksum showing the file is byte-for-byte unchanged after every failure; malformed, empty and schema-breaking data files, and a write to a directory that does not exist.
+
+**`custom_feature_cmd.txt` — the custom `lowstock` feature.** `lowstock --help`, a successful report, the `[]` no-match edge case, invalid thresholds, and the core commands still working.
+
+Together, `persistance_id_cmd.txt` and `validation_errors_cmd.txt` cover the A1-15 checks: persistence, `--file`, missing id, invalid value and unconfirmed deletion.
 
 ## How the code works
 

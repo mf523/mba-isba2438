@@ -1,0 +1,80 @@
+# validation_errors_cmd.txt - commands for demo.sh: Validation and errors (rubric A1-10 to A1-13).
+# CODING_AGENT_IDENTIFIED_FLAG
+# Run with: ./demo.sh validation_errors_cmd.txt   (format: see command_output_cmd.txt)
+# A1-15 is also carried by its invalid-value (section 2), unconfirmed-deletion (end of
+# section 3) and missing-ID (section 4) checks.
+
+== 0. Setup
+# A scratch directory holding a copy of products.py. No products.json exists yet.
+pwd
+ls
+
+== 1. Starting data
+# two products to run the failing commands against
+python3 products.py add --name "Notebook" --price 4.5 --quantity 10
+python3 products.py add --name "Pencil" --price 1.25 --quantity 5
+[A1-13] cat products.json
+# record the file checksum; every failure below must leave it unchanged
+[A1-13] shasum -a 256 products.json
+
+== 2. Invalid field values are rejected before saving
+# name: empty or whitespace-only
+[A1-10, A1-15] python3 products.py add --name "" --price 1 --quantity 1
+[A1-10, A1-15] python3 products.py add --name "   " --price 1 --quantity 1
+# price: sign, non-number, too many decimals, currency symbol, exponent
+[A1-10, A1-15] python3 products.py add --name "Bad" --price -5 --quantity 1
+[A1-10, A1-15] python3 products.py add --name "Bad" --price abc --quantity 1
+[A1-10, A1-15] python3 products.py add --name "Bad" --price 1.501 --quantity 1
+[A1-10, A1-15] python3 products.py add --name "Bad" --price '$5' --quantity 1
+[A1-10, A1-15] python3 products.py add --name "Bad" --price 1e3 --quantity 1
+# quantity: negative or fractional
+[A1-10, A1-15] python3 products.py add --name "Bad" --price 1 --quantity -3
+[A1-10, A1-15] python3 products.py add --name "Bad" --price 1 --quantity 2.5
+# update validates every supplied value too
+[A1-10, A1-15] python3 products.py update 1 --quantity 2.5
+[A1-10, A1-15] python3 products.py update 1 --name "Fine" --price abc
+
+== 3. Invalid IDs, syntax and confirmation
+# ids must be positive integers
+[A1-11] python3 products.py get abc
+[A1-11] python3 products.py get 0
+# unknown command, unknown flag, unexpected positional argument
+[A1-11] python3 products.py frobnicate
+[A1-11] python3 products.py list --bogus
+[A1-11] python3 products.py get 1 2
+# missing required flags
+[A1-11] python3 products.py add --name "Missing flags"
+# update with no field flag
+[A1-11] python3 products.py update 1
+# delete without --yes is refused
+[A1-11, A1-15] python3 products.py delete 1
+# product 1 is still there
+[A1-13, A1-15] python3 products.py get 1
+
+== 4. Missing IDs
+# exit 1, message on stderr naming the id, no traceback, nothing on stdout
+[A1-12, A1-15] python3 products.py get 99
+[A1-12, A1-15] python3 products.py update 99 --price 1
+[A1-12, A1-15] python3 products.py delete 99 --yes
+
+== 5. Every failed mutation left the file unchanged
+# same checksum as in section 1, and next_id is still 3
+[A1-13] shasum -a 256 products.json
+[A1-13] cat products.json
+
+== 6. Invalid stored data and file errors
+# malformed JSON
+printf "{ not json" > broken.json
+[A1-12] python3 products.py --file broken.json list
+[A1-12] python3 products.py --file broken.json add --name X --price 1 --quantity 1
+# the broken file was not overwritten
+[A1-13] cat broken.json; echo
+# an empty file and a file that breaks the schema
+: > empty.json
+[A1-12] python3 products.py --file empty.json list
+printf '{"next_id": 0, "products": []}' > schema.json
+[A1-12] python3 products.py --file schema.json add --name X --price 1 --quantity 1
+[A1-13] cat schema.json; echo
+# a write to a directory that does not exist is reported, not created
+[A1-12] python3 products.py --file /no/such/dir/products.json add --name X --price 1 --quantity 1
+[A1-12] ls /no/such/dir

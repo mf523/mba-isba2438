@@ -1,0 +1,33 @@
+# custom_feature_cmd.txt - commands for demo.sh: the custom lowstock feature.
+# CODING_AGENT_IDENTIFIED_FLAG
+# Run with: ./demo.sh custom_feature_cmd.txt   (format: see command_output_cmd.txt)
+# The custom feature is not one of the rubric groups, so no command here is tagged.
+
+== 0. Setup
+# A scratch directory holding a copy of products.py. No products.json exists yet.
+pwd
+ls
+# lowstock appears in --help
+python3 products.py lowstock --help
+
+== 1. Successful use
+# lowstock --threshold N lists products with quantity <= N, sorted by id
+python3 products.py add --name "Notebook" --price 4.5 --quantity 12
+python3 products.py add --name "Eraser" --price 0.5 --quantity 2
+python3 products.py add --name "Stapler" --price 3.25 --quantity 0
+python3 products.py add --name "Pencil" --price 1.25 --quantity 5
+python3 products.py lowstock --threshold 5
+
+== 2. Edge case: nothing at or below the threshold
+# prints [] and exits 0; --file works with the custom command too
+python3 products.py --file store.json add --name "Store Item" --price 2.50 --quantity 7
+python3 products.py --file store.json lowstock --threshold 5
+
+== 3. Edge case: invalid threshold
+# a usage error with exit 2, not a crash
+python3 products.py lowstock --threshold -1
+python3 products.py lowstock --threshold 2.5
+
+== 4. Core commands still work
+python3 products.py list
+python3 products.py get 2
