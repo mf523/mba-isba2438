@@ -49,7 +49,7 @@ Every command has `--help`.
 | Situation | stdout | stderr | exit |
 |---|---|---|---|
 | success | JSON result | nothing | 0 |
-| usage or value error: bad syntax, missing flag, invalid name/price/quantity/threshold, invalid id, empty update, `delete` without `--yes` | nothing | usage line then `Error: ...` | 2 |
+| usage or value error: bad syntax, missing flag, invalid name/price/quantity/threshold, invalid id, empty update, `delete` without `--yes`, empty `--file` path | nothing | usage line then `Error: ...` | 2 |
 | runtime error: id not found, invalid stored data, file cannot be read or written | nothing | `Error: ...` | 1 |
 
 A traceback is never shown. A failed command never changes the data file.
@@ -146,7 +146,7 @@ Run `python3 products.py lowstock --help` for the built-in description.
 - `next_id` is the id the next `add` will use. It only ever goes up.
 - Products are kept sorted by id.
 - If the file does not exist, reading commands treat it as an empty inventory (`list` and `lowstock` print `[]`, `get` reports the id as not found) and do not create it. The first successful `add` creates it. `update` and `delete` on a missing file report not found and do not create it.
-- If the file exists but is not valid UTF-8 JSON in exactly this shape, every command fails with exit 1 and leaves the file alone.
+- If the file exists but is not valid UTF-8 JSON in exactly this shape, every data command fails with exit 1 and leaves the file alone. `--help` never reads the file, so it still works.
 
 ## IDs
 
@@ -165,74 +165,3 @@ python3 -m unittest -v
 ```
 
 `test_products.py` runs the real CLI as a separate process in a temporary directory for each test, organised by rubric criterion (`A101Add`, `A102List`, ... `A113FailedMutationsLeaveFileUnchanged`) plus a `CustomLowStock` suite for the custom feature. It checks exit codes, that nothing goes to stdout on failure, that no traceback is printed, and that the file bytes are unchanged after every failed mutation.
-
-## Recording the demonstration
-
-```sh
-./run_cmd.sh demo_cmd.txt                # the whole recording, in handout order
-./run_cmd.sh command_output_cmd.txt      # the handout's success sequence
-./run_cmd.sh persistance_id_cmd.txt      # persistence and IDs (A1-07 to A1-09)
-./run_cmd.sh validation_errors_cmd.txt   # validation and errors (A1-10 to A1-13)
-./run_cmd.sh custom_feature_cmd.txt      # the custom lowstock feature
-```
-
-`run_cmd.sh` takes exactly one command file, reads it line by line and pauses after every command; press <space> to continue. Each run copies `products.py` into a fresh scratch directory and runs there, so it is safe to rerun. In a command file, `== ` starts a stage heading, `# ` is a note shown on screen, blank lines are ignored and every other line is a command. Rubric ids are written at the end of the note above the commands they label, for example `# get returns product 1   [A1-03, A1-14]`, so the recording names the criterion each step demonstrates.
-
-**`demo_cmd.txt` — the whole recording in one run.** Follows the handout's "Demonstration and Submission" list in order: start with no `products.json`, the eight-command success sequence, the saved file and a later invocation, a missing id / invalid value / delete without `--yes` with checksums proving the file is unchanged, `--file` with a separate data file, the code walkthrough (with `SAY:` prompts for what to explain), and `lowstock` with a successful use and the `[]` edge case. The other four files below go deeper into each rubric group.
-
-**`command_output_cmd.txt` — the handout's success sequence.** Starting with no `products.json`, it runs the handout's eight commands in order: `--help`, the Notebook and Pencil adds (ids 1 and 2), `list`, `get 1`, `update 1 --quantity 12`, `delete 2 --yes`, and the final `list`. It then shows the saved file (only Notebook, `"4.50"`, quantity 12, `next_id` 3) and a later invocation reading the saved data.
-
-**`persistance_id_cmd.txt` — persistence and IDs (A1-07 to A1-09).** A missing data file lists as `[]` and is not created; adds in separate processes are saved and read back; the file has the `next_id`/`products` shape; deleting id 2 leaves `next_id` at 3, so the next add gets id 3; `--file` works before or after the command and leaves `products.json` untouched.
-
-**`validation_errors_cmd.txt` — validation and errors (A1-10 to A1-13).** Invalid names, prices and quantities on `add` and `update`; invalid ids, unknown commands and flags, extra arguments, missing flags, an empty update and `delete` without `--yes`; missing ids on `get`, `update` and `delete`; a checksum showing the file is byte-for-byte unchanged after every failure; malformed, empty and schema-breaking data files, and a write to a directory that does not exist.
-
-**`custom_feature_cmd.txt` — the custom `lowstock` feature.** `lowstock --help`, a successful report, the `[]` no-match edge case, invalid thresholds, and the core commands still working.
-
-Together, `persistance_id_cmd.txt` and `validation_errors_cmd.txt` cover the A1-15 checks: persistence, `--file`, missing id, invalid value and unconfirmed deletion.
-
-## How the code works
-
-Read this before the recording so the explanation is in your own words.
-
-**Structure.** The code is organised into five classes, each with one job:
-
-| Class | Job |
-|---|---|
-| `Validators` | static methods that check and clean command-line values (`name`, `price`, `quantity`, `product_id`) |
-| `ProductStore` | the JSON file at one path: `load`, `check`, `save` |
-| `Inventory` | the six commands as methods (`add`, `list`, `get`, `update`, `delete`, `lowstock`), working on a `ProductStore` |
-| `Parser` | an `argparse.ArgumentParser` whose usage errors print `Error: ...` and exit 2 |
-| `ProductsCLI` | builds the parser, runs one command, prints the JSON result and returns the exit code |
-
-`ProductError` is the exception for runtime failures, and `main()` simply calls `ProductsCLI().run()`.
-
-**Entry point.** `ProductsCLI.run()` builds the argument parser, parses the command line, works out which data file to use (`--file` or `products.json`), creates an `Inventory` on a `ProductStore` for that path, and calls the `Inventory` method named after the chosen command. Whatever that method returns is printed as JSON. If it raises `ProductError`, the message is printed on stderr and the exit code is 1.
-
-**Parsing and validation.** `ProductsCLI.build_parser()` defines the six sub-commands with `argparse`. Each `--name`, `--price`, `--quantity`, `ID` and `--threshold` argument has a `type=` function (`Validators.name`, `Validators.price`, `Validators.quantity`, `Validators.product_id`) that either returns the cleaned value or raises an error. argparse turns that error into a usage message and exit code 2. Because this runs during parsing, every value is validated before any file is opened. `Validators.price` is the interesting one: a regex accepts only plain digits with an optional one- or two-digit decimal part, then `decimal.Decimal` formats it as the canonical two-decimal string, so `4`, `4.5` and `4.50` all become `"4.50"`. The two checks argparse cannot express, an `update` with no fields and a `delete` without `--yes`, are done at the top of `Inventory.update` and `Inventory.delete` and also use exit code 2.
-
-**Reading the file.** `ProductStore.load()` opens the file as UTF-8 and parses it with `json.loads`. A missing file returns an empty store, `{"next_id": 1, "products": []}`, without creating anything. Any other read problem, a JSON syntax error, or a file that is not UTF-8 becomes a `ProductError`. The parsed data then goes through `ProductStore.check`, which confirms the exact shape: `next_id` is an integer of 1 or more, `products` is a list, every product has exactly the four fields with the right types (`price` must be a string like `"4.50"`), no id repeats, and every id is below `next_id`.
-
-**Each command.** `Inventory.add` takes `next_id` as the new product's id, appends the product, increments `next_id` and saves. `Inventory.list` returns the products sorted by id. `Inventory.get` uses `Inventory.find`, which scans for the id and raises `ProductError` when it is absent. `Inventory.update` collects the flags that were actually given, finds the product, applies only those fields with `dict.update`, and saves. `Inventory.delete` finds the product (so a missing id fails before anything changes), filters it out of the list, saves, and returns `{"deleted_id": ID}`. `next_id` is not touched, which is what keeps deleted ids from being reused.
-
-**The custom command.** `Inventory.lowstock` loads the store, keeps the products whose `quantity` is at or below the threshold, sorts them by id and returns them; `ProductsCLI.run()` prints the array as JSON. It reads the file and never writes one, so it cannot damage anything.
-
-**Writing the file.** `ProductStore.save(data)` sorts the products, serialises the whole store with `json.dumps(indent=2, ensure_ascii=False)`, writes it to a temporary file in the same directory, flushes and fsyncs it, copies the original file's permissions, and finally calls `os.replace` to rename the temporary file over the real one. The rename is atomic, so the file on disk is always either the complete old version or the complete new version. If anything fails along the way the temporary file is removed and the original is untouched.
-
-**Why failed mutations never change the file.** Order of operations in every mutating command: validate arguments (argparse) → load and check the file → find the product → apply the change in memory → write atomically. Every failure happens before the write, and the write cannot half-succeed.
-
-## Design choices where the handout leaves room
-
-The handout pins the contract (exact flag names, exit codes, default path, validation thresholds); a few details are left open. These are the choices made here; each is a one-line change if the assignment handout says otherwise.
-
-| Choice | What this tool does | Where to change it |
-|---|---|---|
-| exit codes | 0 success, 1 runtime error, 2 usage/value error | `EXIT_ERROR`, `EXIT_USAGE` at the top of `products.py` |
-| default data file | `products.json` in the current directory | `DEFAULT_FILE` |
-| `--file` position | accepted before or after the command name | the second `--file` argument in `ProductsCLI.build_parser` |
-| price input | leading zeros allowed (`04.5` → `"4.50"`) | `Validators.price` |
-| quantity rule | 0 is allowed; decimals like `2.0` and signs like `+1` are rejected | `Validators.quantity` |
-| name rule | blank rejected; stored trimmed | `Validators.name` |
-| missing data file | reads as empty, created by the first `add` | `ProductStore.load`, the `FileNotFoundError` branch |
-| output formatting | pretty-printed JSON, two-space indent | the `json.dumps` call in `ProductsCLI.run()` |
-| stored-data strictness | exactly `next_id` and `products` at the top level, exactly four fields per product | `ProductStore.check` |
-| lowstock threshold | required, inclusive (quantity <= threshold) | `Inventory.lowstock` |

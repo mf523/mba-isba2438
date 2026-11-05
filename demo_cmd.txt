@@ -51,7 +51,7 @@ cat store.json
 python3 products.py list
 
 == 5. Explain the command code and the file read/write flow
-# SAY: the classes - Validators, ProductStore, Inventory, Parser, ProductsCLI (README: How the code works)   [A1-16]
+# SAY: the classes - Validators, ProductStore, Inventory, Parser, ProductsCLI (DESIGN.md: How the code works)   [A1-16]
 grep -nE '^class |^    def ' products.py
 # SAY: read flow - ProductStore.load opens the file as UTF-8, json.loads, then check() verifies
 # SAY: next_id/products; a missing file is an empty store
