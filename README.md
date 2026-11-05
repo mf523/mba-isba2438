@@ -191,17 +191,29 @@ Together, `persistance_id_cmd.txt` and `validation_errors_cmd.txt` cover the A1-
 
 Read this before the recording so the explanation is in your own words.
 
-**Entry point.** `main()` builds the argument parser, parses the command line, works out which data file to use (`--file` or `products.json`), and calls the function registered for the chosen command. Whatever that function returns is printed as JSON. If it raises `ProductError`, the message is printed on stderr and the exit code is 1.
+**Structure.** The code is organised into five classes, each with one job:
 
-**Parsing and validation.** `build_parser()` defines the six sub-commands with `argparse`. Each `--name`, `--price`, `--quantity`, `ID` and `--threshold` argument has a `type=` function (`parse_name`, `parse_price`, `parse_quantity`, `parse_id`) that either returns the cleaned value or raises an error. argparse turns that error into a usage message and exit code 2. Because this runs during parsing, every value is validated before any file is opened. `parse_price` is the interesting one: a regex accepts only plain digits with an optional one- or two-digit decimal part, then `decimal.Decimal` formats it as the canonical two-decimal string, so `4`, `4.5` and `4.50` all become `"4.50"`. The two checks argparse cannot express, an `update` with no fields and a `delete` without `--yes`, are done at the top of `cmd_update` and `cmd_delete` and also use exit code 2.
+| Class | Job |
+|---|---|
+| `Validators` | static methods that check and clean command-line values (`name`, `price`, `quantity`, `product_id`) |
+| `ProductStore` | the JSON file at one path: `load`, `check`, `save` |
+| `Inventory` | the six commands as methods (`add`, `list`, `get`, `update`, `delete`, `lowstock`), working on a `ProductStore` |
+| `Parser` | an `argparse.ArgumentParser` whose usage errors print `Error: ...` and exit 2 |
+| `ProductsCLI` | builds the parser, runs one command, prints the JSON result and returns the exit code |
 
-**Reading the file.** `load_store(path)` opens the file as UTF-8 and parses it with `json.loads`. A missing file returns an empty store, `{"next_id": 1, "products": []}`, without creating anything. Any other read problem, a JSON syntax error, or a file that is not UTF-8 becomes a `ProductError`. The parsed data then goes through `check_store`, which confirms the exact shape: `next_id` is an integer of 1 or more, `products` is a list, every product has exactly the four fields with the right types (`price` must be a string like `"4.50"`), no id repeats, and every id is below `next_id`.
+`ProductError` is the exception for runtime failures, and `main()` simply calls `ProductsCLI().run()`.
 
-**Each command.** `cmd_add` takes `next_id` as the new product's id, appends the product, increments `next_id` and saves. `cmd_list` returns the products sorted by id. `cmd_get` uses `find_product`, which scans for the id and raises `ProductError` when it is absent. `cmd_update` collects the flags that were actually given, finds the product, applies only those fields with `dict.update`, and saves. `cmd_delete` finds the product (so a missing id fails before anything changes), filters it out of the list, saves, and returns `{"deleted_id": ID}`. `next_id` is not touched, which is what keeps deleted ids from being reused.
+**Entry point.** `ProductsCLI.run()` builds the argument parser, parses the command line, works out which data file to use (`--file` or `products.json`), creates an `Inventory` on a `ProductStore` for that path, and calls the `Inventory` method named after the chosen command. Whatever that method returns is printed as JSON. If it raises `ProductError`, the message is printed on stderr and the exit code is 1.
 
-**The custom command.** `cmd_lowstock` loads the store, keeps the products whose `quantity` is at or below the threshold, sorts them by id and returns them; `main()` prints the array as JSON. It reads the file and never writes one, so it cannot damage anything.
+**Parsing and validation.** `ProductsCLI.build_parser()` defines the six sub-commands with `argparse`. Each `--name`, `--price`, `--quantity`, `ID` and `--threshold` argument has a `type=` function (`Validators.name`, `Validators.price`, `Validators.quantity`, `Validators.product_id`) that either returns the cleaned value or raises an error. argparse turns that error into a usage message and exit code 2. Because this runs during parsing, every value is validated before any file is opened. `Validators.price` is the interesting one: a regex accepts only plain digits with an optional one- or two-digit decimal part, then `decimal.Decimal` formats it as the canonical two-decimal string, so `4`, `4.5` and `4.50` all become `"4.50"`. The two checks argparse cannot express, an `update` with no fields and a `delete` without `--yes`, are done at the top of `Inventory.update` and `Inventory.delete` and also use exit code 2.
 
-**Writing the file.** `save_store(path, data)` sorts the products, serialises the whole store with `json.dumps(indent=2, ensure_ascii=False)`, writes it to a temporary file in the same directory, flushes and fsyncs it, copies the original file's permissions, and finally calls `os.replace` to rename the temporary file over the real one. The rename is atomic, so the file on disk is always either the complete old version or the complete new version. If anything fails along the way the temporary file is removed and the original is untouched.
+**Reading the file.** `ProductStore.load()` opens the file as UTF-8 and parses it with `json.loads`. A missing file returns an empty store, `{"next_id": 1, "products": []}`, without creating anything. Any other read problem, a JSON syntax error, or a file that is not UTF-8 becomes a `ProductError`. The parsed data then goes through `ProductStore.check`, which confirms the exact shape: `next_id` is an integer of 1 or more, `products` is a list, every product has exactly the four fields with the right types (`price` must be a string like `"4.50"`), no id repeats, and every id is below `next_id`.
+
+**Each command.** `Inventory.add` takes `next_id` as the new product's id, appends the product, increments `next_id` and saves. `Inventory.list` returns the products sorted by id. `Inventory.get` uses `Inventory.find`, which scans for the id and raises `ProductError` when it is absent. `Inventory.update` collects the flags that were actually given, finds the product, applies only those fields with `dict.update`, and saves. `Inventory.delete` finds the product (so a missing id fails before anything changes), filters it out of the list, saves, and returns `{"deleted_id": ID}`. `next_id` is not touched, which is what keeps deleted ids from being reused.
+
+**The custom command.** `Inventory.lowstock` loads the store, keeps the products whose `quantity` is at or below the threshold, sorts them by id and returns them; `ProductsCLI.run()` prints the array as JSON. It reads the file and never writes one, so it cannot damage anything.
+
+**Writing the file.** `ProductStore.save(data)` sorts the products, serialises the whole store with `json.dumps(indent=2, ensure_ascii=False)`, writes it to a temporary file in the same directory, flushes and fsyncs it, copies the original file's permissions, and finally calls `os.replace` to rename the temporary file over the real one. The rename is atomic, so the file on disk is always either the complete old version or the complete new version. If anything fails along the way the temporary file is removed and the original is untouched.
 
 **Why failed mutations never change the file.** Order of operations in every mutating command: validate arguments (argparse) → load and check the file → find the product → apply the change in memory → write atomically. Every failure happens before the write, and the write cannot half-succeed.
 
@@ -213,11 +225,11 @@ The handout pins the contract (exact flag names, exit codes, default path, valid
 |---|---|---|
 | exit codes | 0 success, 1 runtime error, 2 usage/value error | `EXIT_ERROR`, `EXIT_USAGE` at the top of `products.py` |
 | default data file | `products.json` in the current directory | `DEFAULT_FILE` |
-| `--file` position | accepted before or after the command name | the second `--file` argument in `build_parser` |
-| price input | leading zeros allowed (`04.5` → `"4.50"`) | `parse_price` |
-| quantity rule | 0 is allowed; decimals like `2.0` and signs like `+1` are rejected | `parse_quantity` |
-| name rule | blank rejected; stored trimmed | `parse_name` |
-| missing data file | reads as empty, created by the first `add` | `load_store`, the `FileNotFoundError` branch |
-| output formatting | pretty-printed JSON, two-space indent | the `json.dumps` call in `main()` |
-| stored-data strictness | exactly `next_id` and `products` at the top level, exactly four fields per product | `check_store` |
-| lowstock threshold | required, inclusive (quantity <= threshold) | `cmd_lowstock` |
+| `--file` position | accepted before or after the command name | the second `--file` argument in `ProductsCLI.build_parser` |
+| price input | leading zeros allowed (`04.5` → `"4.50"`) | `Validators.price` |
+| quantity rule | 0 is allowed; decimals like `2.0` and signs like `+1` are rejected | `Validators.quantity` |
+| name rule | blank rejected; stored trimmed | `Validators.name` |
+| missing data file | reads as empty, created by the first `add` | `ProductStore.load`, the `FileNotFoundError` branch |
+| output formatting | pretty-printed JSON, two-space indent | the `json.dumps` call in `ProductsCLI.run()` |
+| stored-data strictness | exactly `next_id` and `products` at the top level, exactly four fields per product | `ProductStore.check` |
+| lowstock threshold | required, inclusive (quantity <= threshold) | `Inventory.lowstock` |
