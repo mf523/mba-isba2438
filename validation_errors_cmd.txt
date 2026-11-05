@@ -13,71 +13,73 @@ ls
 # two products to run the failing commands against
 python3 products.py add --name "Notebook" --price 4.5 --quantity 10
 python3 products.py add --name "Pencil" --price 1.25 --quantity 5
-[A1-13] cat products.json
+# the starting file, before any failure   [A1-13]
+cat products.json
 # keep an untouched copy, then record both checksums; every failure below
-# must leave products.json identical to the copy
-[A1-13] cp products.json products.json.orig
-[A1-13] shasum -a 256 products.json products.json.orig
+# must leave products.json identical to the copy   [A1-13]
+cp products.json products.json.orig
+shasum -a 256 products.json products.json.orig
 
 == 2. Invalid field values are rejected before saving
-# name: empty or whitespace-only
-[A1-10, A1-15] python3 products.py add --name "" --price 1 --quantity 1
-[A1-10, A1-15] python3 products.py add --name "   " --price 1 --quantity 1
-# price: sign, non-number, too many decimals, currency symbol, exponent
-[A1-10, A1-15] python3 products.py add --name "Bad" --price -5 --quantity 1
-[A1-10, A1-15] python3 products.py add --name "Bad" --price abc --quantity 1
-[A1-10, A1-15] python3 products.py add --name "Bad" --price 1.501 --quantity 1
-[A1-10, A1-15] python3 products.py add --name "Bad" --price '$5' --quantity 1
-[A1-10, A1-15] python3 products.py add --name "Bad" --price 1e3 --quantity 1
-# quantity: negative or fractional
-[A1-10, A1-15] python3 products.py add --name "Bad" --price 1 --quantity -3
-[A1-10, A1-15] python3 products.py add --name "Bad" --price 1 --quantity 2.5
-# update validates every supplied value too
-[A1-10, A1-15] python3 products.py update 1 --quantity 2.5
-[A1-10, A1-15] python3 products.py update 1 --name "Fine" --price abc
+# name: empty or whitespace-only   [A1-10, A1-15]
+python3 products.py add --name "" --price 1 --quantity 1
+python3 products.py add --name "   " --price 1 --quantity 1
+# price: sign, non-number, too many decimals, currency symbol, exponent   [A1-10, A1-15]
+python3 products.py add --name "Bad" --price -5 --quantity 1
+python3 products.py add --name "Bad" --price abc --quantity 1
+python3 products.py add --name "Bad" --price 1.501 --quantity 1
+python3 products.py add --name "Bad" --price '$5' --quantity 1
+python3 products.py add --name "Bad" --price 1e3 --quantity 1
+# quantity: negative or fractional   [A1-10, A1-15]
+python3 products.py add --name "Bad" --price 1 --quantity -3
+python3 products.py add --name "Bad" --price 1 --quantity 2.5
+# update validates every supplied value too   [A1-10, A1-15]
+python3 products.py update 1 --quantity 2.5
+python3 products.py update 1 --name "Fine" --price abc
 
 == 3. Invalid IDs, syntax and confirmation
-# ids must be positive integers
-[A1-11] python3 products.py get abc
-[A1-11] python3 products.py get 0
-# unknown command, unknown flag, unexpected positional argument
-[A1-11] python3 products.py frobnicate
-[A1-11] python3 products.py list --bogus
-[A1-11] python3 products.py get 1 2
-# missing required flags
-[A1-11] python3 products.py add --name "Missing flags"
-# update with no field flag
-[A1-11] python3 products.py update 1
-# delete without --yes is refused
-[A1-11, A1-15] python3 products.py delete 1
-# product 1 is still there
-[A1-13, A1-15] python3 products.py get 1
+# ids must be positive integers   [A1-11]
+python3 products.py get abc
+python3 products.py get 0
+# unknown command, unknown flag, unexpected positional argument   [A1-11]
+python3 products.py frobnicate
+python3 products.py list --bogus
+python3 products.py get 1 2
+# missing required flags   [A1-11]
+python3 products.py add --name "Missing flags"
+# update with no field flag   [A1-11]
+python3 products.py update 1
+# delete without --yes is refused   [A1-11, A1-15]
+python3 products.py delete 1
+# product 1 is still there   [A1-13, A1-15]
+python3 products.py get 1
 
 == 4. Missing IDs
-# exit 1, message on stderr naming the id, no traceback, nothing on stdout
-[A1-12, A1-15] python3 products.py get 99
-[A1-12, A1-15] python3 products.py update 99 --price 1
-[A1-12, A1-15] python3 products.py delete 99 --yes
+# exit 1, message on stderr naming the id, no traceback, nothing on stdout   [A1-12, A1-15]
+python3 products.py get 99
+python3 products.py update 99 --price 1
+python3 products.py delete 99 --yes
 
 == 5. Every failed mutation left the file unchanged
 # products.json still has the same checksum as the untouched copy from section 1,
-# and next_id is still 3
-[A1-13] shasum -a 256 products.json products.json.orig
-[A1-13] cat products.json
+# and next_id is still 3   [A1-13]
+shasum -a 256 products.json products.json.orig
+cat products.json
 
 == 6. Invalid stored data and file errors
-# malformed JSON
+# malformed JSON   [A1-12]
 printf "{ not json" > broken.json
-[A1-12] python3 products.py --file broken.json list
-[A1-12] python3 products.py --file broken.json add --name X --price 1 --quantity 1
-# the broken file was not overwritten
-[A1-13] cat broken.json; echo
-# an empty file and a file that breaks the schema
+python3 products.py --file broken.json list
+python3 products.py --file broken.json add --name X --price 1 --quantity 1
+# the broken file was not overwritten   [A1-13]
+cat broken.json; echo
+# an empty file and a file that breaks the schema   [A1-12]
 : > empty.json
-[A1-12] python3 products.py --file empty.json list
+python3 products.py --file empty.json list
 printf '{"next_id": 0, "products": []}' > schema.json
-[A1-12] python3 products.py --file schema.json add --name X --price 1 --quantity 1
-[A1-13] cat schema.json; echo
-# a write to a directory that does not exist is reported, not created
-[A1-12] python3 products.py --file /no/such/dir/products.json add --name X --price 1 --quantity 1
-[A1-12] ls /no/such/dir
+python3 products.py --file schema.json add --name X --price 1 --quantity 1
+# the schema-breaking file was not overwritten   [A1-13]
+cat schema.json; echo
+# a write to a directory that does not exist is reported, not created   [A1-12]
+python3 products.py --file /no/such/dir/products.json add --name X --price 1 --quantity 1
+ls /no/such/dir

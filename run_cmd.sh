@@ -45,13 +45,9 @@ wait_space() {
 
 heading() { printf '\n\033[1;36m==== %s ====\033[0m\n' "$*"; }
 note()    { printf '\033[2m# %s\033[0m\n' "$*"; }
-# run COMMAND [TAG] - show the command (and its rubric tag, if any), run it, pause.
+# run COMMAND - show the command, run it, pause.
 run() {
-  if [ -n "${2:-}" ]; then
-    printf '\n\033[1m$ %s\033[0m   \033[33m[%s]\033[0m\n' "$1" "$2"
-  else
-    printf '\n\033[1m$ %s\033[0m\n' "$1"
-  fi
+  printf '\n\033[1m$ %s\033[0m\n' "$1"
   eval "$1"
   local status=$?
   if [ "$status" -eq 0 ]; then
@@ -70,7 +66,6 @@ while IFS= read -r line <&3 || [ -n "$line" ]; do
     "== "*) started=1; heading "${line#== }" ;;
     "#"*)   [ "$started" -eq 1 ] && note "$(printf '%s' "${line#\#}" | sed 's/^ //')" ;;
     "")     ;;
-    "["*"] "*) tag="${line%%]*}"; run "${line#*] }" "${tag#[}" ;;
     *)      run "$line" ;;
   esac
 done 3<"$CMDS"
