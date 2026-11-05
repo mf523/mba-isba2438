@@ -1,0 +1,70 @@
+# demo_cmd.txt - commands for demo.sh: the whole recorded demonstration, in the order
+# the handout lists it ("Demonstration and Submission").
+# CODING_AGENT_IDENTIFIED_FLAG
+# Run with: ./demo.sh demo_cmd.txt   (format: see command_output_cmd.txt)
+# Tags name the recording criteria: A1-14 success sequence and final data,
+# A1-15 persistence / --file / missing ID / invalid value / unconfirmed deletion,
+# A1-16 explaining the code. "SAY:" notes are prompts for what to explain aloud.
+
+== 0. Start with no products.json
+# a fresh scratch directory holding only products.py
+[A1-14] ls
+
+== 1. Required success sequence
+[A1-14] python3 products.py --help
+# the two adds assign ids 1 and 2
+[A1-14] python3 products.py add --name "Notebook" --price 4.5 --quantity 10
+[A1-14] python3 products.py add --name "Pencil" --price 1.25 --quantity 5
+[A1-14] python3 products.py list
+[A1-14] python3 products.py get 1
+# only the quantity changes; name and price are kept
+[A1-14] python3 products.py update 1 --quantity 12
+[A1-14] python3 products.py delete 2 --yes
+# final list: only Notebook, price "4.50", quantity 12
+[A1-14] python3 products.py list
+
+== 2. The saved JSON file and a later invocation
+# next_id stays 3 even though id 2 was deleted
+[A1-14] cat products.json
+# a brand-new process reads the saved data back from disk
+[A1-14, A1-15] python3 products.py get 1
+
+== 3. Failed commands leave the saved data unchanged
+# keep an untouched copy and record both checksums
+cp products.json products.json.orig
+[A1-15] shasum -a 256 products.json products.json.orig
+# missing id: exit 1, error on stderr, no traceback
+[A1-15] python3 products.py get 99
+# invalid field value: exit 2, rejected before the file is opened
+[A1-15] python3 products.py update 1 --price abc
+# delete without --yes is refused
+[A1-15] python3 products.py delete 1
+# the checksums still match: no failure touched the file
+[A1-15] shasum -a 256 products.json products.json.orig
+[A1-15] python3 products.py get 1
+
+== 4. --file with a separate data file
+[A1-15] python3 products.py --file store.json add --name "Stapler" --price 3.25 --quantity 7
+[A1-15] python3 products.py --file store.json list
+[A1-15] cat store.json
+# the default products.json is untouched
+[A1-15] python3 products.py list
+
+== 5. Explain the command code and the file read/write flow
+# SAY: the classes - Validators, ProductStore, Inventory, Parser, ProductsCLI (README: How the code works)
+[A1-16] grep -nE '^class |^    def ' products.py
+# SAY: read flow - ProductStore.load opens the file as UTF-8, json.loads, then check() verifies
+# SAY: next_id/products; a missing file is an empty store
+# SAY: write flow - ProductStore.save writes a temp file, fsyncs, then os.replace renames it over
+# SAY: products.json, so the file is always the complete old or complete new version
+# SAY: pick one command (e.g. Inventory.update): validate args -> load -> find -> change -> save
+[A1-16] sed -n '/    def update(self, args):/,/        return product/p' products.py
+
+== 6. Custom feature: lowstock
+# SAY: the problem - a store owner needs to know what to reorder before it runs out
+# SAY: input --threshold N; logic: keep products with quantity <= N, sort by id; output: JSON array
+python3 products.py add --name "Eraser" --price 0.5 --quantity 2
+# successful use: Eraser (2) is at or below 5, Notebook (12) is not
+python3 products.py lowstock --threshold 5
+# edge case: nothing at or below the threshold prints [] with exit 0
+python3 products.py lowstock --threshold 1

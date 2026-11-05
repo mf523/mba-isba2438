@@ -18,6 +18,8 @@ pwd
 [A1-14] ls
 
 == 1. Required success sequence
+# the eight commands from the handout, in order, starting with no products.json
+[A1-06, A1-14] python3 products.py --help
 # the two adds assign ids 1 and 2
 [A1-01, A1-14] python3 products.py add --name "Notebook" --price 4.5 --quantity 10
 [A1-01, A1-14] python3 products.py add --name "Pencil" --price 1.25 --quantity 5
@@ -28,8 +30,6 @@ pwd
 [A1-05, A1-14] python3 products.py delete 2 --yes
 # final list: only Notebook, price "4.50", quantity 12
 [A1-02, A1-14] python3 products.py list
-# the eight commands from the handout, in order, starting with no products.json
-[A1-06, A1-14] python3 products.py --help
 
 == 2. Expected final data
 # the saved JSON file: only Notebook remains and next_id stays 3

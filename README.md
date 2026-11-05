@@ -169,6 +169,7 @@ python3 -m unittest -v
 ## Recording the demonstration
 
 ```sh
+./demo.sh demo_cmd.txt                # the whole recording, in handout order
 ./demo.sh command_output_cmd.txt      # the handout's success sequence
 ./demo.sh persistance_id_cmd.txt      # persistence and IDs (A1-07 to A1-09)
 ./demo.sh validation_errors_cmd.txt   # validation and errors (A1-10 to A1-13)
@@ -176,6 +177,8 @@ python3 -m unittest -v
 ```
 
 `demo.sh` takes exactly one command file, reads it line by line and pauses after every command; press <space> to continue. Each run copies `products.py` into a fresh scratch directory and runs there, so it is safe to rerun. In a command file, `== ` starts a stage heading, `# ` is a note shown on screen, blank lines are ignored and every other line is a command. A command may start with a rubric tag such as `[A1-03]`; it is shown in yellow next to the command so the recording names the criterion each step demonstrates. Each tagged command carries exactly one criterion, taken from the group its file covers (A1-01–06, A1-07–09 or A1-10–13); the custom-feature file is untagged.
+
+**`demo_cmd.txt` — the whole recording in one run.** Follows the handout's "Demonstration and Submission" list in order: start with no `products.json`, the eight-command success sequence, the saved file and a later invocation, a missing id / invalid value / delete without `--yes` with checksums proving the file is unchanged, `--file` with a separate data file, the code walkthrough (with `SAY:` prompts for what to explain), and `lowstock` with a successful use and the `[]` edge case. The other four files below go deeper into each rubric group.
 
 **`command_output_cmd.txt` — the handout's success sequence.** Starting with no `products.json`, it runs the handout's eight commands in order: `--help`, the Notebook and Pencil adds (ids 1 and 2), `list`, `get 1`, `update 1 --quantity 12`, `delete 2 --yes`, and the final `list`. It then shows the saved file (only Notebook, `"4.50"`, quantity 12, `next_id` 3) and a later invocation reading the saved data.
 
