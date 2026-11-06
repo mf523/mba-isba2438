@@ -1,43 +1,4 @@
 #!/usr/bin/env python3
-"""products.py - a product-inventory CLI backed by a local JSON file.
-
-CODING_AGENT_IDENTIFIED_FLAG: this tool was developed with a coding agent,
-as the assignment handout requires ("Use a Coding Agent for assessed
-development"). The flag marks the source throughout.
-
-Python 3 standard library only. Every command is non-interactive: nothing
-ever prompts, so the tool is safe to call from scripts and recordings.
-
-Commands
-    add    --name NAME --price PRICE --quantity QTY     create a product
-    list                                                every product, sorted by id
-    get    ID                                           one product
-    update ID [--name NAME] [--price PRICE] [--quantity QTY]
-                                                        change only the supplied fields
-    delete ID --yes                                     remove a product (needs --yes)
-    lowstock --threshold N                              custom feature: products with
-                                                        quantity at or below N
-
-Output contract
-    success ................ JSON on stdout, exit 0, nothing on stderr
-    usage / value error .... "Error: ..." on stderr, exit 2, data file untouched
-    runtime error .......... "Error: ..." on stderr, exit 1, data file untouched
-                             (missing id, invalid stored data, file problems)
-    A traceback is never printed.
-
-Storage
-    {"next_id": <int>, "products": [{"id": 1, "name": "...", "price": "9.99",
-                                     "quantity": 10}, ...]}
-    Prices are stored and printed as strings with exactly two decimal places
-    ("9.99"). Default path is ./products.json; --file PATH selects another
-    data file. A missing file reads as an empty inventory and is created by
-    the first successful add. Writes are atomic (temp file + rename), so a
-    failure mid-write can never leave a half-written file.
-"""
-
-# CODING_AGENT_IDENTIFIED_FLAG - see the module docstring: coding-agent
-# development is required by the handout and flagged throughout the source.
-
 import argparse
 import decimal
 import json
@@ -70,14 +31,6 @@ examples:
 
 class ProductError(Exception):
     """A runtime failure, reported on stderr with EXIT_ERROR."""
-
-
-# ---------------------------------------------------------------------------
-# CODING_AGENT_IDENTIFIED_FLAG
-# Validators: value checks for command-line input. These run inside argparse
-# (as `type=` functions), so every supplied value is checked before the data
-# file is even opened.
-# ---------------------------------------------------------------------------
 
 class Validators:
     """Turn raw command-line text into clean values, or raise ArgumentTypeError."""
@@ -125,12 +78,6 @@ class Validators:
         if product_id < 1:
             raise argparse.ArgumentTypeError("must be a positive integer, got %r" % text)
         return product_id
-
-
-# ---------------------------------------------------------------------------
-# CODING_AGENT_IDENTIFIED_FLAG
-# ProductStore: reading, checking and atomically writing the JSON file.
-# ---------------------------------------------------------------------------
 
 class ProductStore:
     """The JSON data file at one path: {"next_id": N, "products": [...]}."""
@@ -234,13 +181,6 @@ class ProductStore:
                 except OSError:
                     pass
 
-
-# ---------------------------------------------------------------------------
-# CODING_AGENT_IDENTIFIED_FLAG
-# Inventory: the commands. Each method receives the parsed args and returns
-# the JSON-serialisable value to print.
-# ---------------------------------------------------------------------------
-
 class Inventory:
     """The six commands, working on one ProductStore."""
 
@@ -309,13 +249,6 @@ class Inventory:
             (item for item in data["products"] if item["quantity"] <= args.threshold),
             key=lambda item: item["id"],
         )
-
-
-# ---------------------------------------------------------------------------
-# CODING_AGENT_IDENTIFIED_FLAG
-# Command-line interface: Parser (argparse with our error format) and
-# ProductsCLI (builds the parser, dispatches to Inventory, prints the result).
-# ---------------------------------------------------------------------------
 
 class Parser(argparse.ArgumentParser):
     """ArgumentParser whose usage errors print "Error: ..." and use EXIT_USAGE."""
